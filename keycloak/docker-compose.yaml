@@ -1,0 +1,16 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: keycloak_new
+    environment:
+      - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
+      - KC_HOSTNAME=10.13.10.250
+      - KC_HOSTNAME_STRICT=false
+      - KC_HTTP_ENABLED=true
+    volumes:
+      - ./import:/opt/keycloak/data/import
+    ports:
+      - "10.13.10.250:8080:8080"
+    # The --import-realm flag tells Keycloak to scan /opt/keycloak/data/import
+    command: start-dev --import-realm
