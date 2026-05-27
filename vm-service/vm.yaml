@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: Secret  # Fixed capitalization
+metadata:
+  name: test-vm-bootstrap-secret
+  namespace: test-namespace
+type: Opaque
+stringData:  # Fixed: Use stringData for plain text cloud-config
+  user-data: |
+    #cloud-config
+    hostname: cicd-ubuntu-vm
+    manage_etc_hosts: true
+    ssh_pwauth: true
+    users:
+      - name: devops
+        sudo: ALL=(ALL) NOPASSWD:ALL
+        groups: [docker, sudo]
+        shell: /bin/bash
+        lock_passwd: true
+        ssh_authorized_keys:
+          - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCYMb+TMOiluK4F8yym9Kx+gPkhFGBByOs+1o/S2l8Tks5ZXCJJLbAByzvuVSqsBTzN1ELPo/N50L4UQ4sbGhUGhZ0Von5qBQ4FNnI3VFFzpQZM7GEazUIJOUAx4r03j8oSTinZfQ68l6wd9XQI7nFAzp8DsEjqf2mwjNE4adGlwFdjWZJpD93p/LLaY/Uc8ZHwRxqLkv7zfEqw7Ktc9wG3GpSUidQNHmQ8Sq2aX1+rE8IOrdoMSwvtr3JzCHC/Owfn4+AW0mRRHdkHJ7nxEesGLKr/FSVzerk2IlWIrOAzp6z8czlfNhkOh53vvICL/l2SKkbKlzBUZKLX9SA8VwhoB2Jv5Fr35tBpQJfdzzYsT4TTM0sEQQXY9tX9IkenR4Wi6Z3LfWvMW0nRemQoOs9dm6WHJ+KseDkfsjnGn6OUt2DcXFnvoTSsKYuDJq8Agr6mgk+FI1kU+aX9ErTmnUiborQ5M1FKQuEcuBi9yCuk8geYeMoyfOUZY3cgYx+XBPtlNoTxZi6G960nW3i8iN/LgXIqQJrTF8RqaTjTjzPxU6ojuB2sgxHRLtCQ62kK8bLzPxxs5yUtJoz8/SVPTK44+/z40qOGgZYCao89AS8kKwSQ4q1P0vEM09CDThA+nN7UO43RB3BfV9RCO8x0fMIqtUHroiC1Yv3H/pWZxrr/wQ== abc@example.com"
+      - name: opsadmin
+        lock_passwd: false
+        sudo: ALL=(ALL) NOPASSWD:ALL
+        groups: [docker, sudo]
+        shell: /bin/bash
+        passwd: "$6$lI8J6dvVpig7A3zd$TBNp5J9NqvJf.xKqyp7sd50h3N1KesE02xyKlYuUvLNu8T9vV27aXtie7MxnqQee0BRCTgn42kTbNvtHslYJN0"
+    package_update: true
+    packages:
+      - curl
+      - git
+      - jq
+      - docker.io
+    runcmd:
+      - sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+      - systemctl restart ssh
+      - systemctl enable --now docker
+      - usermod -aG docker devops
+      - usermod -aG docker opsadmin
+      - curl -LO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+      - install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+---
+apiVersion: vmoperator.vmware.com/v1alpha3
+kind: VirtualMachine
+metadata:
+  name: test-vm
+  namespace: test-namespace # Fixed: Match Secret and Service namespace
+  labels:
+    test-vm-lb: vm-lb-selector # Matches Service selector
+    topology.kubernetes.io/zone: sfo-w01-zn01
+spec:
+  className: best-effort-medium
+  imageName: vmi-4a11449c9ad297e92
+  storageClass: vsan-default-storage-policy
+  powerState: PoweredOn
+  bootstrap:
+    cloudInit:
+      rawCloudConfig:
+        key: user-data
+        name: test-vm-bootstrap-secret
+  network:
+    hostName: test-vm
+---
+apiVersion: vmoperator.vmware.com/v1alpha3
+kind: VirtualMachineService
+metadata:
+  name: test-vm-lb
+  namespace: test-namespace # Fixed: Match VM namespace
+spec:
+  type: LoadBalancer
+  selector:
+    test-vm-lb: vm-lb-selector
+  ports:
+    - name: ssh
+      port: 22
+      protocol: TCP
+      targetPort: 22
+

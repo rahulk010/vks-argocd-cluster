@@ -1,0 +1,59 @@
+apiVersion: addons.kubernetes.vmware.com/v1alpha1
+kind: AddonInstall
+metadata:
+  name: test-cluster-cert-manager
+  namespace: test-namespace
+spec:
+  addonRef:
+    name: cert-manager
+  clusters:
+  - selector:
+      matchLabels:
+        cluster.x-k8s.io/cluster-name: test-cluster
+---
+
+apiVersion: addons.kubernetes.vmware.com/v1alpha1
+kind: AddonInstall
+metadata:
+  name: test-cluster-contour
+  namespace: test-namespace # Your vSphere namespace
+spec:
+  addonRef:
+    name: contour
+  clusters:
+  - selector:
+      matchLabels:
+        cluster.x-k8s.io/cluster-name: test-cluster
+---
+apiVersion: addons.kubernetes.vmware.com/v1alpha1
+kind: AddonConfig
+metadata:
+  annotations:
+    clusteraddon.addons.kubernetes.vmware.com/owned-for-deletion: "true"
+  name: test-cluster-contour
+  namespace: test-namespace
+spec:
+  values:
+    certificates:
+      duration: 8760h
+      renewBefore: 360h
+    contour:
+      configFileContents: {}
+      logLevel: info
+      pspNames: vmware-system-restricted
+      replicas: 2
+      useProxyProtocol: false
+    envoy:
+      hostNetwork: false
+      hostPorts:
+        enable: true
+        http: 80
+        https: 443
+      logLevel: info
+      service:
+        annotations: {}
+        disableWait: false
+        externalTrafficPolicy: Cluster
+        type: LoadBalancer
+      terminationGracePeriodSeconds: 300
+    namespace: vks-system-ingress
